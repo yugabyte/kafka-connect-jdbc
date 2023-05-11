@@ -15,14 +15,13 @@
 
 package io.confluent.connect.jdbc.sink;
 
+import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
 
 import java.sql.Connection;
 import java.sql.SQLException;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 import io.confluent.connect.jdbc.dialect.DatabaseDialect;
 import io.confluent.connect.jdbc.util.CachedConnectionProvider;
@@ -82,6 +81,118 @@ public class JdbcDbWriter {
       }
       connection.commit();
     } catch (SQLException | TableAlterOrCreateException e) {
+      try {
+        connection.rollback();
+      } catch (SQLException sqle) {
+        e.addSuppressed(sqle);
+      } finally {
+        throw e;
+      }
+    }
+  }
+
+  void writeConsistently(final Collection<SinkRecord> records)
+      throws SQLException, TableAlterOrCreateException {
+    final Connection connection = cachedConnectionProvider.getConnection();
+    try {
+      BufferedRecords buffer;
+      for (SinkRecord record : records) {
+        // Instead of buffering, we will directly commit all the records.
+        final TableId tableId = destinationTable(record.topic());
+        buffer = new BufferedRecords(config, tableId, dbDialect, dbStructure, connection);
+        buffer.add(record);
+        buffer.flush();
+        buffer.close();
+        connection.commit();
+      }
+    } catch (SQLException | TableAlterOrCreateException e) {
+      try {
+        connection.rollback();
+      } catch (SQLException sqle) {
+        e.addSuppressed(sqle);
+      } finally {
+        throw e;
+      }
+    }
+  }
+
+  /**
+   * Write the records to the target database only when all the commit records have been seen.
+   *
+   * TODO: This function requires the the record it is reading should contain the following
+   * if source info present then source -> {db,schema,table}
+   * if txn record, then payload -> {db,schema,table}
+   * @param records
+   */
+  void writeConsistentlyWithTxnRecords(final Collection<SinkRecord> records) {
+    final Connection connection = cachedConnectionProvider.getConnection();
+    try {
+      final Map<String, Stack<SinkRecord>> txnMetadata = new HashMap<>();
+      final Map<TableId, BufferedRecords> bufferedRecords = new HashMap<>();
+      for (SinkRecord record : records) {
+        // If we receive a begin-commit message then check and add the stack
+        Struct s = (Struct) record.value();
+        if (s.getStruct("payload").getString("status").equals("BEGIN")) { // For begin
+          Struct payload = s.getStruct("payload");
+          final String fullTableName =
+            String.format("%s.%s.%s", payload.getString("db"), payload.getString("schema"),
+                          payload.getString("table"));
+          Stack<SinkRecord> recordStack = txnMetadata.get(fullTableName);
+          if (recordStack == null) {
+            recordStack = new Stack<>();
+            txnMetadata.put(fullTableName, recordStack);
+          }
+
+          recordStack.push(record);
+        } else if (s.getStruct("payload").getString("status").equals("END")) { // For commit
+          Struct payload = s.getStruct("payload");
+          final String fullTableName =
+            String.format("%s.%s.%s", payload.getString("db"), payload.getString("schema"),
+                          payload.getString("table"));
+          Stack<SinkRecord> recordStack = txnMetadata.get(fullTableName);
+          if (recordStack == null) {
+            throw new IllegalStateException("Commit record encountered without a preceding begin");
+          }
+          recordStack.pop();
+          if (recordStack.isEmpty()) {
+            final TableId tableId = new TableId(payload.getString("db"),
+                                                payload.getString("schema"),
+                                                payload.getString("table"));
+            BufferedRecords buffer = bufferedRecords.get(tableId);
+            buffer.flush();
+            buffer.close();
+            connection.commit();
+          }
+        } else {
+          final TableId tableId = destinationTable(record.topic());
+
+          Struct source = s.getStruct("source");
+          final String fullTableName =
+            String.format("%s.%s.%s", source.getString("db"), source.getString("schema"),
+              source.getString("table"));
+
+          BufferedRecords buffer = bufferedRecords.get(tableId);
+
+          if(txnMetadata.get(fullTableName) == null || txnMetadata.get(fullTableName).isEmpty()) {
+            // This indicates that there are no begin-commit messages associated yet, the current
+            // record is not a part of any transaction.
+            // Flush the records.
+            buffer = new BufferedRecords(config, tableId, dbDialect, dbStructure, connection);
+            buffer.add(record);
+            buffer.flush();
+            buffer.close();
+            connection.commit();
+          } else {
+            if (buffer == null) {
+              buffer = new BufferedRecords(config, tableId, dbDialect, dbStructure, connection);
+              bufferedRecords.put(tableId, buffer);
+            }
+
+            buffer.add(record);
+          }
+        }
+      }
+    } catch (SQLException e) {
       try {
         connection.rollback();
       } catch (SQLException sqle) {

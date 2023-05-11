@@ -87,7 +87,7 @@ public class JdbcSinkTask extends SinkTask {
         recordsCount, first.topic(), first.kafkaPartition(), first.kafkaOffset()
     );
     try {
-      writer.write(records);
+      writer.writeConsistently(records);
     } catch (TableAlterOrCreateException tace) {
       if (reporter != null) {
         unrollAndRetry(records);
@@ -141,7 +141,7 @@ public class JdbcSinkTask extends SinkTask {
     initWriter();
     for (SinkRecord record : records) {
       try {
-        writer.write(Collections.singletonList(record));
+        writer.writeConsistently(Collections.singletonList(record));
       } catch (TableAlterOrCreateException tace) {
         log.debug(tace.toString());
         reporter.report(record, tace);
