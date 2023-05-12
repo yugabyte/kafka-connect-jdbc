@@ -419,7 +419,6 @@
                         <id>validate</id>
                         <phase>validate</phase>
                         <configuration>
-                            <skip>true</skip>
                             <suppressionsLocation>checkstyle/suppressions.xml</suppressionsLocation>
                         </configuration>
                         <goals>
