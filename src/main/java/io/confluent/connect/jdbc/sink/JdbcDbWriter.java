@@ -151,7 +151,7 @@ public class JdbcDbWriter {
    * if txn record, then payload -> {db,schema,table}
    * @param records
    */
-  void writeConsistentlyWithTxnRecords(final Collection<SinkRecord> records) {
+  void writeConsistentlyWithTxnRecords(final Collection<SinkRecord> records) throws Exception {
     final Connection connection = cachedConnectionProvider.getConnection();
     try {
       final Map<String, Stack<SinkRecord>> txnMetadata = new HashMap<>();
