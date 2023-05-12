@@ -15,7 +15,6 @@
 
 package io.confluent.connect.jdbc.sink;
 
-import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
