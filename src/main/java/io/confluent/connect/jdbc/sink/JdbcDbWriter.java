@@ -15,6 +15,7 @@
 
 package io.confluent.connect.jdbc.sink;
 
+import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -22,6 +23,7 @@ import org.apache.kafka.connect.sink.SinkRecord;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.*;
+import java.util.stream.Collectors;
 
 import io.confluent.connect.jdbc.dialect.DatabaseDialect;
 import io.confluent.connect.jdbc.util.CachedConnectionProvider;
@@ -91,19 +93,45 @@ public class JdbcDbWriter {
     }
   }
 
+  /*
+  NOtes:
+  1. the moment we encounter a begin record, we commit the flushed transaction
+  2. Keep flushing till we see commit
+  3.
+   */
   void writeConsistently(final Collection<SinkRecord> records)
       throws SQLException, TableAlterOrCreateException {
     final Connection connection = cachedConnectionProvider.getConnection();
     try {
-      BufferedRecords buffer;
+      final Map<TableId, BufferedRecords> bufferedRecords = new HashMap<>();
       for (SinkRecord record : records) {
-        // Instead of buffering, we will directly commit all the records.
-        final TableId tableId = destinationTable(record.topic());
-        buffer = new BufferedRecords(config, tableId, dbDialect, dbStructure, connection);
-        buffer.add(record);
-        buffer.flush();
-        buffer.close();
-        connection.commit();
+        Struct s = (Struct) record.value();
+        boolean isTxnRecord = s.getStruct("payload").schema().fields().stream()
+                               .map(f -> f.name()).collect(Collectors.toSet()).contains("status");
+        if (isTxnRecord) {
+          if (s.getStruct("payload").getString("status").equals("BEGIN")) {
+            // Do nothing, indicate a connection start.
+            log.info("Encountered a begin record in sink");
+          } else {
+            for (Map.Entry<TableId, BufferedRecords> entry : bufferedRecords.entrySet()) {
+              TableId tableId = entry.getKey();
+              BufferedRecords buffer = entry.getValue();
+//              buffer.flush();
+              buffer.close();
+            }
+            connection.commit();
+          }
+        } else {
+          final TableId tableId = destinationTable(record.topic());
+          BufferedRecords buffer = bufferedRecords.get(tableId);
+          if (buffer == null) {
+            buffer = new BufferedRecords(config, tableId, dbDialect, dbStructure, connection);
+            bufferedRecords.put(tableId, buffer);
+          }
+
+          buffer.add(record);
+          buffer.flush();
+        }
       }
     } catch (SQLException | TableAlterOrCreateException e) {
       try {
@@ -133,36 +161,29 @@ public class JdbcDbWriter {
         // If we receive a begin-commit message then check and add the stack
         Struct s = (Struct) record.value();
         if (s.getStruct("payload").getString("status").equals("BEGIN")) { // For begin
-          Struct payload = s.getStruct("payload");
-          final String fullTableName =
-            String.format("%s.%s.%s", payload.getString("db"), payload.getString("schema"),
-                          payload.getString("table"));
-          Stack<SinkRecord> recordStack = txnMetadata.get(fullTableName);
-          if (recordStack == null) {
-            recordStack = new Stack<>();
-            txnMetadata.put(fullTableName, recordStack);
-          }
-
-          recordStack.push(record);
+          // Start a transaction.
         } else if (s.getStruct("payload").getString("status").equals("END")) { // For commit
-          Struct payload = s.getStruct("payload");
-          final String fullTableName =
-            String.format("%s.%s.%s", payload.getString("db"), payload.getString("schema"),
-                          payload.getString("table"));
-          Stack<SinkRecord> recordStack = txnMetadata.get(fullTableName);
-          if (recordStack == null) {
-            throw new IllegalStateException("Commit record encountered without a preceding begin");
-          }
-          recordStack.pop();
-          if (recordStack.isEmpty()) {
-            final TableId tableId = new TableId(payload.getString("db"),
-                                                payload.getString("schema"),
-                                                payload.getString("table"));
-            BufferedRecords buffer = bufferedRecords.get(tableId);
-            buffer.flush();
-            buffer.close();
-            connection.commit();
-          }
+//          Struct payload = s.getStruct("payload");
+//          final String fullTableName =
+//            String.format("%s.%s.%s", payload.getString("db"), payload.getString("schema"),
+//                          payload.getString("table"));
+//          Stack<SinkRecord> recordStack = txnMetadata.get(fullTableName);
+//          if (recordStack == null) {
+//            throw new IllegalStateException("Commit record encountered without a preceding begin");
+//          }
+//          recordStack.pop();
+//          if (recordStack.isEmpty()) {
+//            final TableId tableId = new TableId(payload.getString("db"),
+//                                                payload.getString("schema"),
+//                                                payload.getString("table"));
+//            BufferedRecords buffer = bufferedRecords.get(tableId);
+//            buffer.flush();
+//            buffer.close();
+//            connection.commit();
+//          }
+
+          // commit the transaction
+          connection.commit();
         } else {
           final TableId tableId = destinationTable(record.topic());
 
@@ -189,6 +210,7 @@ public class JdbcDbWriter {
             }
 
             buffer.add(record);
+            buffer.flush();
           }
         }
       }
