@@ -257,6 +257,9 @@ public class JdbcSinkConfig extends AbstractConfig {
 
   public static final String TRIM_SENSITIVE_LOG_ENABLED = "trim.sensitive.log";
   private static final String TRIM_SENSITIVE_LOG_ENABLED_DEFAULT = "false";
+
+  private static final String CONSISTENT_WRITES = "consistent.writes";
+  private static final String CONSISTENT_WRITES_DEFAULT = "false";
   private static final EnumRecommender QUOTE_METHOD_RECOMMENDER =
       EnumRecommender.in(QuoteMethod.values());
 
@@ -495,6 +498,16 @@ public class JdbcSinkConfig extends AbstractConfig {
             ConfigDef.Width.SHORT,
             RETRY_BACKOFF_MS_DISPLAY
         )
+        .define( // TODO: Add proper doc, group and display parameters to this property.
+          CONSISTENT_WRITES,
+          ConfigDef.Type.BOOLEAN,
+          CONSISTENT_WRITES_DEFAULT,
+          ConfigDef.Importance.LOW,
+          AUTO_CREATE_DOC, DDL_GROUP,
+          1,
+          ConfigDef.Width.SHORT,
+          AUTO_CREATE_DISPLAY
+        )
         .defineInternal(
             TRIM_SENSITIVE_LOG_ENABLED,
             ConfigDef.Type.BOOLEAN,
@@ -522,6 +535,7 @@ public class JdbcSinkConfig extends AbstractConfig {
   public final String dialectName;
   public final TimeZone timeZone;
   public final EnumSet<TableType> tableTypes;
+  public final boolean consistentWrites;
 
   public final boolean trimSensitiveLogsEnabled;
 
@@ -553,6 +567,7 @@ public class JdbcSinkConfig extends AbstractConfig {
           "Primary key mode must be 'record_key' when delete support is enabled");
     }
     tableTypes = TableType.parse(getList(TABLE_TYPES_CONFIG));
+    consistentWrites = getBoolean(AUTO_CREATE);
   }
 
   private String getPasswordValue(String key) {
