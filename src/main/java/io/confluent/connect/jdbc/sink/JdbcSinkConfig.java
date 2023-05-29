@@ -498,7 +498,8 @@ public class JdbcSinkConfig extends AbstractConfig {
             ConfigDef.Width.SHORT,
             RETRY_BACKOFF_MS_DISPLAY
         )
-        .define( // TODO: Add proper doc, group and display parameters to this property.
+        // TODO: Add proper doc, group and display parameters to this property.
+        .define(
           CONSISTENT_WRITES,
           ConfigDef.Type.BOOLEAN,
           CONSISTENT_WRITES_DEFAULT,
