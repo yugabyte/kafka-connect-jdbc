@@ -108,8 +108,9 @@ public class JdbcDbWriter {
       final Map<TableId, BufferedRecords> bufferedRecords = new HashMap<>();
       for (SinkRecord record : records) {
         Struct s = (Struct) record.value();
-        boolean isTxnRecord = s.schema().fields().stream()
-                               .map(Field::name).collect(Collectors.toSet()).contains("status");
+        boolean isTxnRecord = record.value() != null
+            && s.schema().fields().stream().map(Field::name)
+                 .collect(Collectors.toSet()).contains("status");
         if (isTxnRecord) {
           if (s.getString("status").equals("BEGIN")) {
             // Do nothing, indicate a connection start.
