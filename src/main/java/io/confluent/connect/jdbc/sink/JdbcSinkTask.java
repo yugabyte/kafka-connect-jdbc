@@ -50,6 +50,7 @@ public class JdbcSinkTask extends SinkTask {
   public void start(final Map<String, String> props) {
     log.info("Starting JDBC Sink task");
     config = new JdbcSinkConfig(props);
+    log.info("Consistent write status in sink: " + config.consistentWrites);
     initWriter();
     remainingRetries = config.maxRetries;
     shouldTrimSensitiveLogs = config.trimSensitiveLogsEnabled;

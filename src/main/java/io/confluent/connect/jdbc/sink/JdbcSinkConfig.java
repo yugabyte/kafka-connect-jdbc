@@ -260,6 +260,9 @@ public class JdbcSinkConfig extends AbstractConfig {
 
   private static final String CONSISTENT_WRITES = "consistent.writes";
   private static final String CONSISTENT_WRITES_DEFAULT = "false";
+  private static final String CONSISTENT_WRITES_DOC =
+      "Whether to use consistency mode or not";
+  private static final String CONSISTENT_WRITES_DISPLAY = "Consistent-Writes";
   private static final EnumRecommender QUOTE_METHOD_RECOMMENDER =
       EnumRecommender.in(QuoteMethod.values());
 
@@ -504,10 +507,10 @@ public class JdbcSinkConfig extends AbstractConfig {
           ConfigDef.Type.BOOLEAN,
           CONSISTENT_WRITES_DEFAULT,
           ConfigDef.Importance.MEDIUM,
-          AUTO_CREATE_DOC, DDL_GROUP,
-          1,
+          CONSISTENT_WRITES_DOC, "",
+          -1,
           ConfigDef.Width.SHORT,
-          AUTO_CREATE_DISPLAY
+          CONSISTENT_WRITES_DISPLAY
         )
         .defineInternal(
             TRIM_SENSITIVE_LOG_ENABLED,

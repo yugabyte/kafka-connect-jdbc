@@ -41,6 +41,8 @@ public class JdbcSinkConnectorTest {
     connConfig.put("connector.class", "io.confluent.connect.jdbc.JdbcSinkConnector");
     connConfig.put("delete.enabled", "true");
 
+    connConfig.put("consistent.writes", "true");
+
     connConfig.put("pk.mode", "record_key");
     assertEquals("'pk.mode must be 'RECORD_KEY/record_key' when 'delete.enabled' == true",
         EMPTY_LIST, configErrors(connector.validate(connConfig), PK_MODE));
