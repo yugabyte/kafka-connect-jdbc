@@ -503,7 +503,7 @@ public class JdbcSinkConfig extends AbstractConfig {
           CONSISTENT_WRITES,
           ConfigDef.Type.BOOLEAN,
           CONSISTENT_WRITES_DEFAULT,
-          ConfigDef.Importance.LOW,
+          ConfigDef.Importance.MEDIUM,
           AUTO_CREATE_DOC, DDL_GROUP,
           1,
           ConfigDef.Width.SHORT,
@@ -568,7 +568,7 @@ public class JdbcSinkConfig extends AbstractConfig {
           "Primary key mode must be 'record_key' when delete support is enabled");
     }
     tableTypes = TableType.parse(getList(TABLE_TYPES_CONFIG));
-    consistentWrites = getBoolean(AUTO_CREATE);
+    consistentWrites = getBoolean(CONSISTENT_WRITES);
   }
 
   private String getPasswordValue(String key) {
