@@ -16,6 +16,8 @@
 package io.confluent.connect.jdbc.sink;
 
 import org.apache.kafka.connect.data.Field;
+import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -129,7 +131,7 @@ public class JdbcDbWriter {
             bufferedRecords.put(tableId, buffer);
           }
 
-          buffer.add(record);
+          buffer.add(removeTableIdentifierField(record));
           buffer.flush();
         }
       }
@@ -142,6 +144,68 @@ public class JdbcDbWriter {
         throw e;
       }
     }
+  }
+
+  /**
+   * Create a sink record after removing the extra field added by a transformer
+   * {@code ExtractTopic} while using consistent writes and when all the records are routed to
+   * a common topic.
+   * @param record the {@link SinkRecord} to remove the field from
+   * @return a converted record without the field {@link JdbcSinkConfig#tableIdentifierField}
+   */
+  SinkRecord removeTableIdentifierField(SinkRecord record) {
+    // If consistent writes are not enabled then we do not need to apply transformation or remove
+    // any identifier field.
+    if (!config.consistentWrites || !config.removeTableIdentifierField) {
+      return record;
+    }
+
+    Schema updatedKeySchema = makeUpdatedSchema(record.keySchema());
+    Schema updatedValueSchema = makeUpdatedSchema(record.valueSchema());
+
+    // We need to update both the structs for key and value.
+    return record.newRecord(record.topic(), record.kafkaPartition(),
+        updatedKeySchema, makeUpdatedStruct(updatedKeySchema, (Struct) record.key()),
+        updatedValueSchema, makeUpdatedStruct(updatedValueSchema, (Struct) record.value()),
+        record.timestamp());
+  }
+
+  /**
+   * Modify the schema for the sink record to not include the field for
+   * {@link JdbcSinkConfig#tableIdentifierField}
+   * @param schema the schema for which the field needs to be removed
+   * @return updated schema with the field removed
+   */
+  Schema makeUpdatedSchema(Schema schema) {
+    SchemaBuilder builder = SchemaBuilder.struct();
+
+    for (Field field : schema.fields()) {
+      if (!field.name().equals(config.tableIdentifierField)) {
+        builder.field(field.name(), field.schema());
+      }
+    }
+
+    return builder.build();
+  }
+
+  /**
+   * Modify the struct for the given value to remove the value pertaining to
+   * {@link JdbcSinkConfig#tableIdentifierField}
+   * @param schema the schema which does not contain the field for
+   * {@link JdbcSinkConfig#tableIdentifierField}
+   * @param value the value which needs the value of the field to be removed
+   * @return a modified struct with the removed value
+   */
+  Struct makeUpdatedStruct(Schema schema, Struct value) {
+    Struct updated = new Struct(schema);
+
+    for (Field field : value.schema().fields()) {
+      if (!field.name().equals(config.tableIdentifierField)) {
+        updated.put(field, value.get(field));
+      }
+    }
+
+    return updated;
   }
 
   void closeQuietly() {
