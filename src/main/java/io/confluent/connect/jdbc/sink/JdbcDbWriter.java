@@ -66,7 +66,7 @@ public class JdbcDbWriter {
 
   void write(final Collection<SinkRecord> records)
       throws SQLException, TableAlterOrCreateException {
-    log.info("Initializing vanilla writer");
+    log.debug("Initializing vanilla writer");
     final Connection connection = cachedConnectionProvider.getConnection();
     try {
       final Map<TableId, BufferedRecords> bufferByTable = new HashMap<>();
