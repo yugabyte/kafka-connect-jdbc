@@ -112,24 +112,27 @@ public class JdbcDbWriter {
     try {
       final Map<TableId, BufferedRecords> bufferedRecords = new HashMap<>();
       for (SinkRecord record : records) {
+        log.debug("Buffering sink record: {}", record);
         Struct s = (Struct) record.value();
         boolean isTxnRecord = record.value() != null
             && s.schema().fields().stream().map(Field::name)
                  .collect(Collectors.toSet()).contains("status");
         if (isTxnRecord) {
           if (s.getString("status").equals("BEGIN")) {
-//            if (transactionInProgress) {
-//              log.warn("Received a BEGIN record when a transaction was in progress, "
-//                        + "rolling back and starting a new transaction");
-//              connection.rollback();
-//            }
+            // if (transactionInProgress) {
+            //  log.warn("Received a BEGIN record when a transaction was in progress, "
+            //            + "rolling back and starting a new transaction");
+            //  connection.rollback();
+            // }
 
             // Do nothing, indicate a connection start.
-            log.debug("Received a BEGIN record with transaction id {}, starting to buffer the records", s.getString("id"));
+            log.debug("Received a BEGIN record with transaction id {}, "
+                        + "starting to buffer the records", s.getString("id"));
             transactionInProgress = true;
           } else {
             // Commit the connection assuming that we have flushed all the records already.
-            log.debug("Received a END record, committing the transaction with id {}", s.getString("id"));
+            log.debug("Received a END record, committing the transaction with id {}",
+                      s.getString("id"));
             connection.commit();
             transactionInProgress = false;
           }
