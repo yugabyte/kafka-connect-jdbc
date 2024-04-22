@@ -71,6 +71,7 @@ public class JdbcDbWriter {
     try {
       final Map<TableId, BufferedRecords> bufferByTable = new HashMap<>();
       for (SinkRecord record : records) {
+        log.debug("Buffering sink record: {}", record);
         final TableId tableId = destinationTable(record.topic());
         BufferedRecords buffer = bufferByTable.get(tableId);
         if (buffer == null) {
@@ -107,6 +108,7 @@ public class JdbcDbWriter {
   void writeConsistently(final Collection<SinkRecord> records)
       throws SQLException, TableAlterOrCreateException {
     final Connection connection = cachedConnectionProvider.getConnection();
+    boolean transactionInProgress = false;
     try {
       final Map<TableId, BufferedRecords> bufferedRecords = new HashMap<>();
       for (SinkRecord record : records) {
@@ -116,12 +118,19 @@ public class JdbcDbWriter {
                  .collect(Collectors.toSet()).contains("status");
         if (isTxnRecord) {
           if (s.getString("status").equals("BEGIN")) {
+            if (transactionInProgress) {
+              log.warn("Received a BEGIN record when a transaction was in progress, rolling back and starting a new transaction");
+              connection.rollback();
+            }
+
             // Do nothing, indicate a connection start.
             log.debug("Received a BEGIN record, starting to buffer the records");
+            transactionInProgress = true;
           } else {
             // Commit the connection assuming that we have flushed all the records already.
             log.debug("Received a END record, committing the transaction");
             connection.commit();
+            transactionInProgress = false;
           }
         } else {
           final TableId tableId = destinationTable(record.topic());
