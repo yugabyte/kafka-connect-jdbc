@@ -119,7 +119,8 @@ public class JdbcDbWriter {
         if (isTxnRecord) {
           if (s.getString("status").equals("BEGIN")) {
             if (transactionInProgress) {
-              log.warn("Received a BEGIN record when a transaction was in progress, rolling back and starting a new transaction");
+              log.warn("Received a BEGIN record when a transaction was in progress, "
+                        + "rolling back and starting a new transaction");
               connection.rollback();
             }
 
