@@ -111,6 +111,7 @@ public class JdbcDbWriter {
     boolean transactionInProgress = false;
     try {
       final Map<TableId, BufferedRecords> bufferedRecords = new HashMap<>();
+      long recordCount = 0;
       for (SinkRecord record : records) {
         log.debug("Buffering sink record: {}", record);
         Struct s = (Struct) record.value();
@@ -129,10 +130,11 @@ public class JdbcDbWriter {
             log.debug("Received a BEGIN record with transaction id {}, "
                         + "starting to buffer the records", s.getString("id"));
             transactionInProgress = true;
+            recordCount = 0;
           } else {
             // Commit the connection assuming that we have flushed all the records already.
-            log.debug("Received a END record, committing the transaction with id {}",
-                      s.getString("id"));
+            log.debug("Received a END record, committing the transaction with id {} with "
+                        + "total record size {}", s.getString("id"), recordCount);
             connection.commit();
             transactionInProgress = false;
           }
@@ -146,6 +148,7 @@ public class JdbcDbWriter {
 
           buffer.add(removeTableIdentifierField(record));
           buffer.flush();
+          ++recordCount;
         }
       }
     } catch (SQLException | TableAlterOrCreateException e) {
@@ -191,6 +194,11 @@ public class JdbcDbWriter {
    * @return updated schema with the field removed
    */
   Schema makeUpdatedSchema(Schema schema) {
+    if (schema == null) {
+      // YB Note: This is to handle tombstone records which will have a null schema.
+      return null;
+    }
+
     SchemaBuilder builder = SchemaBuilder.struct();
 
     for (Field field : schema.fields()) {
@@ -211,6 +219,11 @@ public class JdbcDbWriter {
    * @return a modified struct with the removed value
    */
   Struct makeUpdatedStruct(Schema schema, Struct value) {
+    if (schema == null || value == null) {
+      // YB Note: Handle tombstone records.
+      return null;
+    }
+
     Struct updated = new Struct(schema);
 
     for (Field field : value.schema().fields()) {
