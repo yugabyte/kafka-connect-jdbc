@@ -23,6 +23,7 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
 
 import java.sql.Connection;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Collection;
 import java.util.HashMap;
@@ -134,8 +135,9 @@ public class JdbcDbWriter {
           } else {
             // Commit the connection assuming that we have flushed all the records already.
             log.debug("Received a END record, committing the transaction with id {} with "
-                        + "total record size {}", s.getString("id"), recordCount);
+                        + "total record size {}", s.getString("id"), s.getString("event_count"));
             connection.commit();
+            logTotalBalanceAfterTxnCommit(connection, s.getString("id"));
             transactionInProgress = false;
           }
         } else {
@@ -161,6 +163,31 @@ public class JdbcDbWriter {
         throw e;
       }
     }
+  }
+
+   void logTotalBalanceAfterTxnCommit(
+          Connection connection, String txn_id
+  ) throws SQLException {
+     String warningMessage = "Unable to query sink database for total balance";
+     String query = checkBalanceQuery();
+     try (ResultSet rs = connection.createStatement().executeQuery(query)) {
+       if (rs.next()) {
+         long balance = rs.getInt(1);
+         if(balance != 1000000) {
+           log.debug("Total balance did not match. Actual balance: {}, txn_id: {}", balance, txn_id);
+         } else {
+           log.debug("Total balance match. Actual balance: {}, txn_id: {}", balance, txn_id);
+         }
+       } else {
+         log.warn(warningMessage);
+       }
+     } catch (SQLException e) {
+       log.warn(warningMessage, e);
+     }
+  }
+
+   String checkBalanceQuery() {
+    return "SELECT SUM((SUBSTRING(balance FROM ':(.*?)(:|$)'))::bigint) AS sum FROM (SELECT balance FROM test_cdc_12345) AS subquery;";
   }
 
   /**
