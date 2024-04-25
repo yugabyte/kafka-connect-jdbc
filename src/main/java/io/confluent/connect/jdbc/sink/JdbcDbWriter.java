@@ -174,7 +174,7 @@ public class JdbcDbWriter {
      String query = checkBalanceQuery(tableName);
      try (ResultSet rs = connection.createStatement().executeQuery(query)) {
        if (rs.next()) {
-         long balance = rs.getInt(1);
+         long balance = rs.getLong(1);
          if (balance != 1000000) {
            log.debug("Total balance did not match. Actual balance: {}, txn_id: {}", balance, txnId);
          } else {
