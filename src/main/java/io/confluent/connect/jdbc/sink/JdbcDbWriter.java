@@ -137,10 +137,9 @@ public class JdbcDbWriter {
             log.debug("Received a END record, committing the transaction with id {} with "
                         + "total record size {}", s.getString("id"), s.getInt64("event_count"));
             connection.commit();
-            final Struct dataColections = (Struct) s.getArray("data_collections").get(0);
-//            logTotalBalanceAfterTxnCommit(connection, s.getString("id"),
-//                    s.getStruct("data_collections").getString("data_collection"));
-            logRecordCount(connection, dataColections.getString("data_collection"));
+            final Struct dataCollections = (Struct) s.getArray("data_collections").get(0);
+            logTotalBalanceAfterTxnCommit(connection, s.getString("id"),
+                    dataCollections.getString("data_collection"));
             transactionInProgress = false;
           }
         } else {
@@ -179,7 +178,7 @@ public class JdbcDbWriter {
          if (balance != 1000000) {
            log.debug("Total balance did not match. Actual balance: {}, txn_id: {}", balance, txnId);
          } else {
-           log.debug("Total balance match. Actual balance: {}, txn_id: {}", balance, txnId);
+           log.debug("Total balance matched. Actual balance: {}, txn_id: {}", balance, txnId);
          }
        } else {
          log.warn(warningMessage);
@@ -193,23 +192,6 @@ public class JdbcDbWriter {
     return "SELECT SUM((SUBSTRING(balance FROM ':(.*?)(:|$)'))::bigint) AS sum "
             + "FROM (SELECT balance FROM "
             + tableName + ") AS subquery;";
-  }
-
-  void logRecordCount(
-          Connection connection, String tableName
-  ) throws SQLException {
-    String warningMessage = "Unable to query sink database for record count";
-    String query = "select count(*) from " + tableName;
-    try (ResultSet rs = connection.createStatement().executeQuery(query)) {
-      if (rs.next()) {
-        long recordCount = rs.getInt(1);
-        log.info("sid: recordCount query result: {}", recordCount);
-      } else {
-        log.warn(warningMessage);
-      }
-    } catch (SQLException e) {
-      log.warn(warningMessage, e);
-    }
   }
 
   /**
