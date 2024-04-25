@@ -137,9 +137,10 @@ public class JdbcDbWriter {
             log.debug("Received a END record, committing the transaction with id {} with "
                         + "total record size {}", s.getString("id"), s.getInt64("event_count"));
             connection.commit();
+            final Struct dataColections = (Struct) s.getArray("data_collections").get(0);
 //            logTotalBalanceAfterTxnCommit(connection, s.getString("id"),
 //                    s.getStruct("data_collections").getString("data_collection"));
-            logRecordCount(connection, s.getStruct("data_collections").getString("data_collection"));
+            logRecordCount(connection, dataColections.getString("data_collection"));
             transactionInProgress = false;
           }
         } else {
