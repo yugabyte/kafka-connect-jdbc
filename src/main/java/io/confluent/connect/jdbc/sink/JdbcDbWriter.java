@@ -135,9 +135,11 @@ public class JdbcDbWriter {
           } else {
             // Commit the connection assuming that we have flushed all the records already.
             log.debug("Received a END record, committing the transaction with id {} with "
-                        + "total record size {}", s.getString("id"), s.getString("event_count"));
+                        + "total record size {}", s.getString("id"), s.getInt64("event_count"));
             connection.commit();
-            logTotalBalanceAfterTxnCommit(connection, s.getString("id"));
+//            logTotalBalanceAfterTxnCommit(connection, s.getString("id"),
+//                    s.getStruct("data_collections").getString("data_collection"));
+            logRecordCount(connection, s.getStruct("data_collections").getString("data_collection"));
             transactionInProgress = false;
           }
         } else {
@@ -166,17 +168,17 @@ public class JdbcDbWriter {
   }
 
    void logTotalBalanceAfterTxnCommit(
-          Connection connection, String txn_id
+          Connection connection, String txnId, String tableName
   ) throws SQLException {
      String warningMessage = "Unable to query sink database for total balance";
-     String query = checkBalanceQuery();
+     String query = checkBalanceQuery(tableName);
      try (ResultSet rs = connection.createStatement().executeQuery(query)) {
        if (rs.next()) {
          long balance = rs.getInt(1);
-         if(balance != 1000000) {
-           log.debug("Total balance did not match. Actual balance: {}, txn_id: {}", balance, txn_id);
+         if (balance != 1000000) {
+           log.debug("Total balance did not match. Actual balance: {}, txn_id: {}", balance, txnId);
          } else {
-           log.debug("Total balance match. Actual balance: {}, txn_id: {}", balance, txn_id);
+           log.debug("Total balance match. Actual balance: {}, txn_id: {}", balance, txnId);
          }
        } else {
          log.warn(warningMessage);
@@ -186,8 +188,27 @@ public class JdbcDbWriter {
      }
   }
 
-   String checkBalanceQuery() {
-    return "SELECT SUM((SUBSTRING(balance FROM ':(.*?)(:|$)'))::bigint) AS sum FROM (SELECT balance FROM test_cdc_12345) AS subquery;";
+   String checkBalanceQuery(String tableName) {
+    return "SELECT SUM((SUBSTRING(balance FROM ':(.*?)(:|$)'))::bigint) AS sum "
+            + "FROM (SELECT balance FROM "
+            + tableName + ") AS subquery;";
+  }
+
+  void logRecordCount(
+          Connection connection, String tableName
+  ) throws SQLException {
+    String warningMessage = "Unable to query sink database for record count";
+    String query = "select count(*) from " + tableName;
+    try (ResultSet rs = connection.createStatement().executeQuery(query)) {
+      if (rs.next()) {
+        long recordCount = rs.getInt(1);
+        log.info("sid: recordCount query result: {}", recordCount);
+      } else {
+        log.warn(warningMessage);
+      }
+    } catch (SQLException e) {
+      log.warn(warningMessage, e);
+    }
   }
 
   /**
