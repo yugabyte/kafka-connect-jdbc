@@ -138,8 +138,10 @@ public class JdbcDbWriter {
                         + "total record size {}", s.getString("id"), s.getInt64("event_count"));
             connection.commit();
             final Struct dataCollections = (Struct) s.getArray("data_collections").get(0);
-            logTotalBalanceAfterTxnCommit(connection, s.getString("id"),
-                    dataCollections.getString("data_collection"));
+            if (config.logTableBalance) {
+              logTotalBalanceAfterTxnCommit(connection, s.getString("id"),
+                dataCollections.getString("data_collection"));
+            }
             transactionInProgress = false;
           }
         } else {
