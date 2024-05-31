@@ -49,25 +49,17 @@ public class CachedConnectionProvider implements ConnectionProvider {
   @Override
   public synchronized Connection getConnection() {
     log.debug("Trying to establish connection with the database.");
-    boolean newConnectionEstablished = false;
     try {
       if (connection == null) {
         newConnection();
-        newConnectionEstablished = true;
       } else if (!isConnectionValid(connection, VALIDITY_CHECK_TIMEOUT_S)) {
         log.info("The database connection is invalid. Reconnecting...");
         close();
         newConnection();
-        newConnectionEstablished = true;
       }
     } catch (SQLException sqle) {
       log.debug("Could not establish connection with database.", sqle);
       throw new ConnectException(sqle);
-    }
-    if (newConnectionEstablished) {
-      log.debug("New database connection established.");
-    } else {
-      log.debug("Using existing Database connection.");
     }
     return connection;
   }
