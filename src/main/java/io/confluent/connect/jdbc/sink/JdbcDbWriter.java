@@ -114,7 +114,6 @@ public class JdbcDbWriter {
   void writeConsistently(final Collection<SinkRecord> records)
       throws SQLException, TableAlterOrCreateException {
     final Connection connection = cachedConnectionProvider.getConnection();
-    boolean transactionInProgress = false;
     try {
       final Map<TableId, BufferedRecords> bufferedRecords = new HashMap<>();
       for (SinkRecord record : records) {
