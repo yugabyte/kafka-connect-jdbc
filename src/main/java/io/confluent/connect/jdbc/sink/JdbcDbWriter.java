@@ -242,7 +242,7 @@ public class JdbcDbWriter {
    */
   Struct makeUpdatedStruct(Schema schema, Struct value) {
     if (schema == null || value == null) {
-      // YB Note: Handle tombstone records.
+      // YB Note: This is to handle tombstone records which will have a null schema.
       return null;
     }
 
