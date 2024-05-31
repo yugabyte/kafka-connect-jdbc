@@ -608,7 +608,7 @@ public class JdbcDbWriterTest {
     String query = writer.getBalanceQuery();
     assertEquals("SELECT SUM((SUBSTRING(balance FROM ':(.*?)(:|$)'))::bigint) AS sum FROM "
                   + "(SELECT balance FROM table_a UNION ALL SELECT balance FROM table_b UNION ALL "
-                  + "SELECT balance FROM table_c) AS subquery", writer.getBalanceQuery());
+                  + "SELECT balance FROM table_c) AS subquery;", writer.getBalanceQuery());
   }
 
   @Test
@@ -626,7 +626,7 @@ public class JdbcDbWriterTest {
 
     String query = writer.getBalanceQuery();
     assertEquals("SELECT SUM((SUBSTRING(balance FROM ':(.*?)(:|$)'))::bigint) AS sum FROM "
-                   + "(SELECT balance FROM table_a) AS subquery", writer.getBalanceQuery());
+                   + "(SELECT balance FROM table_a) AS subquery;", writer.getBalanceQuery());
   }
 
 }
