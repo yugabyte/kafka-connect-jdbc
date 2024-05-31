@@ -25,8 +25,11 @@ import org.apache.kafka.connect.sink.SinkRecord;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -43,6 +46,8 @@ public class JdbcDbWriter {
   private final DatabaseDialect dbDialect;
   private final DbStructure dbStructure;
   final CachedConnectionProvider cachedConnectionProvider;
+  private String masterQueryToGetBalance;
+
 
   JdbcDbWriter(final JdbcSinkConfig config, DatabaseDialect dbDialect, DbStructure dbStructure) {
     this.config = config;
@@ -130,8 +135,7 @@ public class JdbcDbWriter {
             connection.commit();
             final Struct dataCollections = (Struct) s.getArray("data_collections").get(0);
             if (config.logTableBalance) {
-              logTotalBalanceAfterTxnCommit(connection, s.getString("id"),
-                dataCollections.getString("data_collection"));
+              logTotalBalanceAfterTxnCommit(connection, s.getString("id"));
             }
           }
         } else {
@@ -159,10 +163,10 @@ public class JdbcDbWriter {
   }
 
    void logTotalBalanceAfterTxnCommit(
-          Connection connection, String txnId, String tableName
+          Connection connection, String txnId
   ) throws SQLException {
      String warningMessage = "Unable to query sink database for total balance";
-     String query = checkBalanceQuery(tableName);
+     String query = getBalanceQuery();
      try (ResultSet rs = connection.createStatement().executeQuery(query)) {
        if (rs.next()) {
          long balance = rs.getLong(1);
@@ -179,10 +183,27 @@ public class JdbcDbWriter {
      }
   }
 
-   String checkBalanceQuery(String tableName) {
+  public String getBalanceQuery() {
+    if (config.tablesForBalance.isEmpty()) {
+      String errorMessage = "Requested table balance when tables.for.balance was empty, "
+                              + "provide a list in the configuration";
+      log.error(errorMessage);
+      throw new RuntimeException(errorMessage);
+    }
+
+    // Form a master query to get balance from all the tables.
+    if (masterQueryToGetBalance == null || masterQueryToGetBalance.isEmpty()) {
+      String[] tableNames = config.tablesForBalance.split(",");
+
+      List<String> queriesForTables = new ArrayList<>();
+      Arrays.stream(tableNames)
+        .forEach(tableName -> queriesForTables.add("SELECT balance FROM " + tableName));
+
+      masterQueryToGetBalance = String.join(" UNION ALL ", queriesForTables);
+    }
+
     return "SELECT SUM((SUBSTRING(balance FROM ':(.*?)(:|$)'))::bigint) AS sum "
-            + "FROM (SELECT balance FROM "
-            + tableName + ") AS subquery;";
+             + "FROM (" + masterQueryToGetBalance + ") AS subquery;";
   }
 
   /**

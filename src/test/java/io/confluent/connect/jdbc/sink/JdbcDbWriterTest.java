@@ -592,4 +592,21 @@ public class JdbcDbWriterTest {
     );
   }
 
+  @Test
+  public void balanceQueryShouldBeReturnedCorrectlyForSingleOrMultipleTables() {
+    Map<String, String> props = new HashMap<>();
+    props.put("connection.url", sqliteHelper.sqliteUri());
+    props.put("auto.create", "true");
+    props.put("delete.enabled", "true");
+    props.put("pk.mode", "record_key");
+    props.put("insert.mode", "upsert");
+    props.put("log.table.balance", "true");
+    props.put("tables.for.balance", "table_a,table_b,table_c");
+
+    writer = newWriter(props);
+
+    String query = writer.getBalanceQuery();
+    System.out.println("Query is " + query);
+  }
+
 }
