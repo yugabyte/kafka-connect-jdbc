@@ -166,7 +166,7 @@ public class JdbcDbWriter {
      try (ResultSet rs = connection.createStatement().executeQuery(query)) {
        if (rs.next()) {
          long balance = rs.getLong(1);
-         if (balance != 1000000) {
+         if (balance != config.expectedTableBalance) {
            log.debug("Total balance did not match. Actual balance: {}, txn_id: {}", balance, txnId);
          } else {
            log.debug("Total balance matched. Actual balance: {}, txn_id: {}", balance, txnId);
