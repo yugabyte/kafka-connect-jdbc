@@ -162,25 +162,25 @@ public class JdbcDbWriter {
     }
   }
 
-   void logTotalBalanceAfterTxnCommit(
+  public void logTotalBalanceAfterTxnCommit(
           Connection connection, String txnId
   ) throws SQLException {
-     String warningMessage = "Unable to query sink database for total balance";
-     String query = getBalanceQuery();
-     try (ResultSet rs = connection.createStatement().executeQuery(query)) {
-       if (rs.next()) {
-         long balance = rs.getLong(1);
-         if (balance != config.expectedTableBalance) {
-           log.debug("Total balance did not match. Actual balance: {}, txn_id: {}", balance, txnId);
-         } else {
-           log.debug("Total balance matched. Actual balance: {}, txn_id: {}", balance, txnId);
-         }
-       } else {
-         log.warn(warningMessage);
-       }
-     } catch (SQLException e) {
-       log.warn(warningMessage, e);
-     }
+    String warningMessage = "Unable to query sink database for total balance";
+    String query = getBalanceQuery();
+    try (ResultSet rs = connection.createStatement().executeQuery(query)) {
+      if (rs.next()) {
+        long balance = rs.getLong(1);
+        if (balance != config.expectedTableBalance) {
+          log.debug("Total balance did not match. Actual balance: {}, txn_id: {}", balance, txnId);
+        } else {
+          log.debug("Total balance matched. Actual balance: {}, txn_id: {}", balance, txnId);
+        }
+      } else {
+        log.warn(warningMessage);
+      }
+    } catch (SQLException e) {
+      log.warn(warningMessage, e);
+    }
   }
 
   public String getBalanceQuery() {
