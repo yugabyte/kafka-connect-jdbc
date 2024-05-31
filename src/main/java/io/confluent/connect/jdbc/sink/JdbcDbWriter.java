@@ -177,6 +177,11 @@ public class JdbcDbWriter {
    * @return updated schema with the field removed
    */
   Schema makeUpdatedSchema(Schema schema) {
+    if (schema == null) {
+      // YB Note: This is to handle tombstone records which will have a null schema.
+      return null;
+    }
+
     SchemaBuilder builder = SchemaBuilder.struct();
 
     for (Field field : schema.fields()) {
@@ -197,6 +202,11 @@ public class JdbcDbWriter {
    * @return a modified struct with the removed value
    */
   Struct makeUpdatedStruct(Schema schema, Struct value) {
+    if (schema == null || value == null) {
+      // YB Note: This is to handle tombstone records which will have a null schema.
+      return null;
+    }
+
     Struct updated = new Struct(schema);
 
     for (Field field : value.schema().fields()) {
