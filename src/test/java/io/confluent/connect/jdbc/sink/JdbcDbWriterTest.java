@@ -592,4 +592,41 @@ public class JdbcDbWriterTest {
     );
   }
 
+  @Test
+  public void balanceQueryShouldBeReturnedCorrectlyForMultipleTables() {
+    Map<String, String> props = new HashMap<>();
+    props.put("connection.url", sqliteHelper.sqliteUri());
+    props.put("auto.create", "true");
+    props.put("delete.enabled", "true");
+    props.put("pk.mode", "record_key");
+    props.put("insert.mode", "upsert");
+    props.put("log.table.balance", "true");
+    props.put("tables.for.balance", "table_a,table_b,table_c");
+
+    writer = newWriter(props);
+
+    String query = writer.getBalanceQuery();
+    assertEquals("SELECT SUM((SUBSTRING(balance FROM ':(.*?)(:|$)'))::bigint) AS sum FROM "
+                  + "(SELECT balance FROM table_a UNION ALL SELECT balance FROM table_b UNION ALL "
+                  + "SELECT balance FROM table_c) AS subquery;", writer.getBalanceQuery());
+  }
+
+  @Test
+  public void balanceQueryShouldBeReturnedCorrectlyForSingleTable() {
+    Map<String, String> props = new HashMap<>();
+    props.put("connection.url", sqliteHelper.sqliteUri());
+    props.put("auto.create", "true");
+    props.put("delete.enabled", "true");
+    props.put("pk.mode", "record_key");
+    props.put("insert.mode", "upsert");
+    props.put("log.table.balance", "true");
+    props.put("tables.for.balance", "table_a");
+
+    writer = newWriter(props);
+
+    String query = writer.getBalanceQuery();
+    assertEquals("SELECT SUM((SUBSTRING(balance FROM ':(.*?)(:|$)'))::bigint) AS sum FROM "
+                   + "(SELECT balance FROM table_a) AS subquery;", writer.getBalanceQuery());
+  }
+
 }

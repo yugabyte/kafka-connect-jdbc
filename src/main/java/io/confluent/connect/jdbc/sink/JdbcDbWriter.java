@@ -23,9 +23,13 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
 
 import java.sql.Connection;
+import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -42,6 +46,8 @@ public class JdbcDbWriter {
   private final DatabaseDialect dbDialect;
   private final DbStructure dbStructure;
   final CachedConnectionProvider cachedConnectionProvider;
+  private String masterQueryToGetBalance;
+
 
   JdbcDbWriter(final JdbcSinkConfig config, DatabaseDialect dbDialect, DbStructure dbStructure) {
     this.config = config;
@@ -71,6 +77,7 @@ public class JdbcDbWriter {
     try {
       final Map<TableId, BufferedRecords> bufferByTable = new HashMap<>();
       for (SinkRecord record : records) {
+        log.debug("Buffering sink record: {}", record);
         final TableId tableId = destinationTable(record.topic());
         BufferedRecords buffer = bufferByTable.get(tableId);
         if (buffer == null) {
@@ -110,6 +117,7 @@ public class JdbcDbWriter {
     try {
       final Map<TableId, BufferedRecords> bufferedRecords = new HashMap<>();
       for (SinkRecord record : records) {
+        log.debug("Buffering sink record: {}", record);
         Struct s = (Struct) record.value();
         boolean isTxnRecord = record.value() != null
             && s.schema().fields().stream().map(Field::name)
@@ -117,11 +125,17 @@ public class JdbcDbWriter {
         if (isTxnRecord) {
           if (s.getString("status").equals("BEGIN")) {
             // Do nothing, indicate a connection start.
-            log.debug("Received a BEGIN record, starting to buffer the records");
+            log.debug("Received a BEGIN record with transaction id {}, "
+                        + "starting to buffer the records", s.getString("id"));
           } else {
             // Commit the connection assuming that we have flushed all the records already.
-            log.debug("Received a END record, committing the transaction");
+            log.debug("Received a END record, committing the transaction with id {} with "
+                        + "total record size {}", s.getString("id"), s.getInt64("event_count"));
             connection.commit();
+            final Struct dataCollections = (Struct) s.getArray("data_collections").get(0);
+            if (config.logTableBalance) {
+              logTotalBalanceAfterTxnCommit(connection, s.getString("id"));
+            }
           }
         } else {
           final TableId tableId = destinationTable(record.topic());
@@ -137,6 +151,7 @@ public class JdbcDbWriter {
       }
     } catch (SQLException | TableAlterOrCreateException e) {
       try {
+        log.warn("Rolling back transaction because of exception", e);
         connection.rollback();
       } catch (SQLException sqle) {
         e.addSuppressed(sqle);
@@ -144,6 +159,50 @@ public class JdbcDbWriter {
         throw e;
       }
     }
+  }
+
+  public void logTotalBalanceAfterTxnCommit(
+          Connection connection, String txnId
+  ) throws SQLException {
+    String warningMessage = "Unable to query sink database for total balance";
+    String query = getBalanceQuery();
+    try (ResultSet rs = connection.createStatement().executeQuery(query)) {
+      if (rs.next()) {
+        long balance = rs.getLong(1);
+        if (balance != config.expectedTableBalance) {
+          log.debug("Total balance did not match. Actual balance: {}, txn_id: {}", balance, txnId);
+        } else {
+          log.debug("Total balance matched. Actual balance: {}, txn_id: {}", balance, txnId);
+        }
+      } else {
+        log.warn(warningMessage);
+      }
+    } catch (SQLException e) {
+      log.warn(warningMessage, e);
+    }
+  }
+
+  public String getBalanceQuery() {
+    if (config.tablesForBalance.isEmpty()) {
+      String errorMessage = "Requested table balance when tables.for.balance was empty, "
+                              + "provide a list in the configuration";
+      log.error(errorMessage);
+      throw new RuntimeException(errorMessage);
+    }
+
+    // Form a master query to get balance from all the tables.
+    if (masterQueryToGetBalance == null || masterQueryToGetBalance.isEmpty()) {
+      String[] tableNames = config.tablesForBalance.split(",");
+
+      List<String> queriesForTables = new ArrayList<>();
+      Arrays.stream(tableNames)
+        .forEach(tableName -> queriesForTables.add("SELECT balance FROM " + tableName));
+
+      masterQueryToGetBalance = String.join(" UNION ALL ", queriesForTables);
+    }
+
+    return "SELECT SUM((SUBSTRING(balance FROM ':(.*?)(:|$)'))::bigint) AS sum "
+             + "FROM (" + masterQueryToGetBalance + ") AS subquery;";
   }
 
   /**

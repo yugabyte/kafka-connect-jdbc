@@ -258,6 +258,11 @@ public class JdbcSinkConfig extends AbstractConfig {
   public static final String TRIM_SENSITIVE_LOG_ENABLED = "trim.sensitive.log";
   private static final String TRIM_SENSITIVE_LOG_ENABLED_DEFAULT = "false";
 
+  private static final String LOG_TABLE_BALANCE = "log.table.balance";
+  private static final boolean LOG_TABLE_BALANCE_DEFAULT = false;
+  private static final String TABLES_FOR_BALANCE = "tables.for.balance";
+  private static final String EXPECTED_TABLE_BALANCE = "expected.table.balance";
+  private static final long EXPECTED_TABLE_BALANCE_DEFAULT = 1000000;
   private static final String CONSISTENT_WRITES = "consistent.writes";
   private static final String CONSISTENT_WRITES_DEFAULT = "false";
   private static final String CONSISTENT_WRITES_DOC =
@@ -529,11 +534,28 @@ public class JdbcSinkConfig extends AbstractConfig {
           CONSISTENT_WRITES_DISPLAY
         )
         .defineInternal(
-          REMOVE_TABLE_IDENTIFIER_FIELD,
+          LOG_TABLE_BALANCE,
           ConfigDef.Type.BOOLEAN,
-          REMOVE_TABLE_IDENTIFIER_FIELD_DEFAULT,
+          LOG_TABLE_BALANCE_DEFAULT,
           ConfigDef.Importance.LOW
         )
+       .defineInternal(EXPECTED_TABLE_BALANCE,
+         ConfigDef.Type.LONG,
+         EXPECTED_TABLE_BALANCE_DEFAULT,
+         ConfigDef.Importance.LOW
+       )
+       .defineInternal(
+         REMOVE_TABLE_IDENTIFIER_FIELD,
+         ConfigDef.Type.BOOLEAN,
+         REMOVE_TABLE_IDENTIFIER_FIELD_DEFAULT,
+         ConfigDef.Importance.LOW
+       )
+       .defineInternal(
+         TABLES_FOR_BALANCE,
+         ConfigDef.Type.STRING,
+         "",
+         ConfigDef.Importance.LOW
+         )
         .defineInternal(
             TRIM_SENSITIVE_LOG_ENABLED,
             ConfigDef.Type.BOOLEAN,
@@ -565,6 +587,9 @@ public class JdbcSinkConfig extends AbstractConfig {
   public final String tableIdentifierField;
   public final boolean removeTableIdentifierField;
   public final boolean trimSensitiveLogsEnabled;
+  public final boolean logTableBalance;
+  public final long expectedTableBalance;
+  public final String tablesForBalance;
 
   public JdbcSinkConfig(Map<?, ?> props) {
     super(CONFIG_DEF, props);
@@ -597,6 +622,9 @@ public class JdbcSinkConfig extends AbstractConfig {
     consistentWrites = getBoolean(CONSISTENT_WRITES);
     tableIdentifierField = getString(TABLE_IDENTIFIER_FIELD);
     removeTableIdentifierField = getBoolean(REMOVE_TABLE_IDENTIFIER_FIELD);
+    logTableBalance = getBoolean(LOG_TABLE_BALANCE);
+    expectedTableBalance = getLong(EXPECTED_TABLE_BALANCE);
+    tablesForBalance = getString(TABLES_FOR_BALANCE);
   }
 
   private String getPasswordValue(String key) {
