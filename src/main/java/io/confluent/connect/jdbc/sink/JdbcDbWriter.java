@@ -124,6 +124,8 @@ public class JdbcDbWriter {
                  .collect(Collectors.toSet()).contains("status");
         if (isTxnRecord) {
           if (s.getString("status").equals("BEGIN")) {
+            log.debug("Rolling back transaction as a sanity");
+            connection.rollback();
             // Do nothing, indicate a connection start.
             log.debug("Received a BEGIN record with transaction id {}, "
                         + "starting to buffer the records", s.getString("id"));
