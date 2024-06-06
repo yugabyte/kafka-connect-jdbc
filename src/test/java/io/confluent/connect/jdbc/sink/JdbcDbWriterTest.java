@@ -632,17 +632,9 @@ public class JdbcDbWriterTest {
   @Test
   public void rollbackUncommittedTxn() throws SQLException {
     String tableName = "books";
-    String createTable = "CREATE TABLE " + tableName + " (" +
-            "     id      INTEGER," +
-            "    author  VARCHAR(50)," +
-            "    title VARCHAR(100)," +
-            ");";
-
-    sqliteHelper.createTable(createTable);
     Map<String, String> props = new HashMap<>();
     props.put("connection.url", sqliteHelper.sqliteUri());
     props.put("auto.create", "true");
-    props.put("auto.evolve", "true");
     props.put("pk.mode", "record_key");
     props.put("pk.fields", "id");
     props.put("consistent.writes", "true");
@@ -679,11 +671,11 @@ public class JdbcDbWriterTest {
 
     // Put the same schema and value in transactional records for ease of use.
     List<SinkRecord> records = new ArrayList<>();
-    records.add(new SinkRecord("topic", 0, txnSchema, beginStruct, txnSchema, beginStruct, 0));
-    records.add(new SinkRecord("topic", 0, keySchema, keyStruct1, valueSchema, valueStruct1, 1));
-    records.add(new SinkRecord("topic", 0, txnSchema, beginStruct, txnSchema, beginStruct, 2));
-    records.add(new SinkRecord("topic", 0, keySchema, keyStruct2, valueSchema, valueStruct2, 3));
-    records.add(new SinkRecord("topic", 0, txnSchema, endStruct, txnSchema, endStruct, 4));
+    records.add(new SinkRecord(tableName, 0, txnSchema, beginStruct, txnSchema, beginStruct, 0));
+    records.add(new SinkRecord(tableName, 0, keySchema, keyStruct1, valueSchema, valueStruct1, 1));
+    records.add(new SinkRecord(tableName, 0, txnSchema, beginStruct, txnSchema, beginStruct, 2));
+    records.add(new SinkRecord(tableName, 0, keySchema, keyStruct2, valueSchema, valueStruct2, 3));
+    records.add(new SinkRecord(tableName, 0, txnSchema, endStruct, txnSchema, endStruct, 4));
     writer.writeConsistently(records);
 
     assertEquals(

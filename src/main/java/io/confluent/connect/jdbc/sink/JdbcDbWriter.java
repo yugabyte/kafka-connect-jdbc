@@ -135,7 +135,6 @@ public class JdbcDbWriter {
             log.debug("Received a END record, committing the transaction with id {} with "
                         + "total record size {}", s.getString("id"), s.getInt64("event_count"));
             connection.commit();
-            final Struct dataCollections = (Struct) s.getArray("data_collections").get(0);
             if (config.logTableBalance) {
               logTotalBalanceAfterTxnCommit(connection, s.getString("id"));
             }
