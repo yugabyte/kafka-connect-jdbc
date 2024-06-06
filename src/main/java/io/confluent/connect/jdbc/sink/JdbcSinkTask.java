@@ -50,6 +50,7 @@ public class JdbcSinkTask extends SinkTask {
   public void start(final Map<String, String> props) {
     log.info("Starting JDBC Sink task");
     config = new JdbcSinkConfig(props);
+    log.info("Consistent write status in sink: " + config.consistentWrites);
     initWriter();
     remainingRetries = config.maxRetries;
     shouldTrimSensitiveLogs = config.trimSensitiveLogsEnabled;
@@ -87,7 +88,11 @@ public class JdbcSinkTask extends SinkTask {
         recordsCount, first.topic(), first.kafkaPartition(), first.kafkaOffset()
     );
     try {
-      writer.write(records);
+      if (config.consistentWrites) {
+        writer.writeConsistently(records);
+      } else {
+        writer.write(records);
+      }
     } catch (TableAlterOrCreateException tace) {
       if (reporter != null) {
         unrollAndRetry(records);
@@ -141,7 +146,11 @@ public class JdbcSinkTask extends SinkTask {
     initWriter();
     for (SinkRecord record : records) {
       try {
-        writer.write(Collections.singletonList(record));
+        if (config.consistentWrites) {
+          writer.writeConsistently(Collections.singletonList(record));
+        } else {
+          writer.write(Collections.singletonList(record));
+        }
       } catch (TableAlterOrCreateException tace) {
         log.debug(tace.toString());
         reporter.report(record, tace);

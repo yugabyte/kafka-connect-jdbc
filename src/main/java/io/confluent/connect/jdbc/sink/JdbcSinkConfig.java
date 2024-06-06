@@ -257,6 +257,18 @@ public class JdbcSinkConfig extends AbstractConfig {
 
   public static final String TRIM_SENSITIVE_LOG_ENABLED = "trim.sensitive.log";
   private static final String TRIM_SENSITIVE_LOG_ENABLED_DEFAULT = "false";
+
+  private static final String CONSISTENT_WRITES = "consistent.writes";
+  private static final String CONSISTENT_WRITES_DEFAULT = "false";
+  private static final String CONSISTENT_WRITES_DOC =
+      "Whether to use consistency mode or not";
+  private static final String CONSISTENT_WRITES_DISPLAY = "Consistent-Writes";
+  private static final String TABLE_IDENTIFIER_FIELD = "table.identifier.field";
+  private static final String REMOVE_TABLE_IDENTIFIER_FIELD = "remove.table.identifier.field";
+  private static final String REMOVE_TABLE_IDENTIFIER_FIELD_DEFAULT = "true";
+  private static final String TABLE_IDENTIFIER_FIELD_DEFAULT = "__dbz__physicalTableIdentifier";
+  private static final String TABLE_IDENTIFIER_FIELD_DOC =
+        "Table identifier field which needs to be removed if using consistency mode";
   private static final EnumRecommender QUOTE_METHOD_RECOMMENDER =
       EnumRecommender.in(QuoteMethod.values());
 
@@ -495,6 +507,33 @@ public class JdbcSinkConfig extends AbstractConfig {
             ConfigDef.Width.SHORT,
             RETRY_BACKOFF_MS_DISPLAY
         )
+        // TODO: Add proper doc, group and display parameters to this property.
+        .define(
+          CONSISTENT_WRITES,
+          ConfigDef.Type.BOOLEAN,
+          CONSISTENT_WRITES_DEFAULT,
+          ConfigDef.Importance.MEDIUM,
+          CONSISTENT_WRITES_DOC, "",
+          -1,
+          ConfigDef.Width.SHORT,
+          CONSISTENT_WRITES_DISPLAY
+        )
+        .define(
+          TABLE_IDENTIFIER_FIELD,
+          ConfigDef.Type.STRING,
+          TABLE_IDENTIFIER_FIELD_DEFAULT,
+          ConfigDef.Importance.LOW,
+          TABLE_IDENTIFIER_FIELD_DOC, "",
+          -1,
+          ConfigDef.Width.LONG,
+          CONSISTENT_WRITES_DISPLAY
+        )
+        .defineInternal(
+          REMOVE_TABLE_IDENTIFIER_FIELD,
+          ConfigDef.Type.BOOLEAN,
+          REMOVE_TABLE_IDENTIFIER_FIELD_DEFAULT,
+          ConfigDef.Importance.LOW
+        )
         .defineInternal(
             TRIM_SENSITIVE_LOG_ENABLED,
             ConfigDef.Type.BOOLEAN,
@@ -522,7 +561,9 @@ public class JdbcSinkConfig extends AbstractConfig {
   public final String dialectName;
   public final TimeZone timeZone;
   public final EnumSet<TableType> tableTypes;
-
+  public final boolean consistentWrites;
+  public final String tableIdentifierField;
+  public final boolean removeTableIdentifierField;
   public final boolean trimSensitiveLogsEnabled;
 
   public JdbcSinkConfig(Map<?, ?> props) {
@@ -553,6 +594,9 @@ public class JdbcSinkConfig extends AbstractConfig {
           "Primary key mode must be 'record_key' when delete support is enabled");
     }
     tableTypes = TableType.parse(getList(TABLE_TYPES_CONFIG));
+    consistentWrites = getBoolean(CONSISTENT_WRITES);
+    tableIdentifierField = getString(TABLE_IDENTIFIER_FIELD);
+    removeTableIdentifierField = getBoolean(REMOVE_TABLE_IDENTIFIER_FIELD);
   }
 
   private String getPasswordValue(String key) {

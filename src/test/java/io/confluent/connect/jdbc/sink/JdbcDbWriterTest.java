@@ -34,9 +34,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 
 import io.confluent.connect.jdbc.dialect.DatabaseDialect;
@@ -221,6 +219,68 @@ public class JdbcDbWriterTest {
     for (Field field : valueSchema2.fields()) {
       assertNotNull(refreshedMetadata.definitionForColumn(field.name()));
     }
+  }
+
+  @Test
+  public void removeTableIdentifierFieldWithConsistentWrites() throws SQLException {
+    String topic = "books";
+    TableId tableId = new TableId(null, null, topic);
+
+    Map<String, String> props = new HashMap<>();
+    props.put("connection.url", sqliteHelper.sqliteUri());
+    props.put("auto.create", "true");
+    props.put("auto.evolve", "true");
+    props.put("pk.mode", "record_key");
+    props.put("pk.fields", "id");
+    props.put("consistent.writes", "true");
+
+    writer = newWriter(props);
+
+    Schema keySchema = SchemaBuilder.struct()
+                         .field("id", Schema.INT32_SCHEMA);
+    Struct keyStruct = new Struct(keySchema)
+                        .put("id", 1);
+
+    Schema valueSchema = SchemaBuilder.struct()
+                            .field("author", Schema.STRING_SCHEMA)
+                            .field("title", Schema.STRING_SCHEMA)
+                            .field("__dbz_physicalTableIdentifier", Schema.STRING_SCHEMA)
+                            .build();
+
+    Struct valueStruct = new Struct(valueSchema)
+                            .put("author", "Tom Robbins")
+                            .put("title", "Villa Incognito")
+                            .put("__dbz_physicalTableIdentifier", "books");
+
+    Schema txnSchema = SchemaBuilder.struct()
+                            .field("status", Schema.STRING_SCHEMA);
+    Struct beginStruct = new Struct(txnSchema).put("status", "BEGIN");
+
+    Struct endStruct = new Struct(txnSchema).put("status", "END");
+
+    // Put the same schema and value in transactional records for ease of use.
+    List<SinkRecord> records = new ArrayList<>();
+    records.add(new SinkRecord(topic, 0, txnSchema, beginStruct, txnSchema, beginStruct, 0));
+    records.add(new SinkRecord(topic, 0, keySchema, keyStruct, valueSchema, valueStruct, 1));
+    records.add(new SinkRecord(topic, 0, txnSchema, endStruct, txnSchema, endStruct, 2));
+    writer.writeConsistently(records);
+
+    assertEquals(
+      1,
+      sqliteHelper.select("select count(*) from books", new SqliteHelper.ResultSetReadCallback() {
+        @Override
+        public void read(ResultSet rs) throws SQLException {
+          assertEquals(1, rs.getInt(1));
+
+          // Also assert that there is no field named __dbz_physicalTableIdentifier
+          try {
+            rs.getString("__dbz_physicalTableIdentifier");
+          } catch (SQLException sqle) {
+            assertTrue(sqle.getMessage().contains("no such column: '__dbz_physicalTableIdentifier'"));
+          }
+        }
+      })
+    );
   }
 
   @Test(expected = SQLException.class)
