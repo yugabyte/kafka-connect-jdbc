@@ -124,7 +124,8 @@ public class JdbcDbWriter {
                  .collect(Collectors.toSet()).contains("status");
         if (isTxnRecord) {
           if (s.getString("status").equals("BEGIN")) {
-            // Rolling back transaction as a sanity check just in case there are any uncommitted transactions.
+            // Rolling back transaction as a sanity check just in case there are any
+            // uncommitted transactions.
             connection.rollback();
 
             // Do nothing, indicate a connection start.

@@ -630,7 +630,7 @@ public class JdbcDbWriterTest {
   }
 
   @Test
-  public void rollbackUncommittedTxn() throws SQLException {
+  public void rollbackUncommittedTxnInConsistencyMode() throws SQLException {
     String tableName = "books";
     Map<String, String> props = new HashMap<>();
     props.put("connection.url", sqliteHelper.sqliteUri());
