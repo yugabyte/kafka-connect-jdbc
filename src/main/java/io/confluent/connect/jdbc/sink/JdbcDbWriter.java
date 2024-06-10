@@ -124,6 +124,10 @@ public class JdbcDbWriter {
                  .collect(Collectors.toSet()).contains("status");
         if (isTxnRecord) {
           if (s.getString("status").equals("BEGIN")) {
+            // Rolling back transaction as a sanity check just in case there are any
+            // uncommitted transactions.
+            connection.rollback();
+
             // Do nothing, indicate a connection start.
             log.debug("Received a BEGIN record with transaction id {}, "
                         + "starting to buffer the records", s.getString("id"));
@@ -132,7 +136,6 @@ public class JdbcDbWriter {
             log.debug("Received a END record, committing the transaction with id {} with "
                         + "total record size {}", s.getString("id"), s.getInt64("event_count"));
             connection.commit();
-            final Struct dataCollections = (Struct) s.getArray("data_collections").get(0);
             if (config.logTableBalance) {
               logTotalBalanceAfterTxnCommit(connection, s.getString("id"));
             }

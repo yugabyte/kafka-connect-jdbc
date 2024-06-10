@@ -629,4 +629,67 @@ public class JdbcDbWriterTest {
                    + "(SELECT balance FROM table_a) AS subquery;", writer.getBalanceQuery());
   }
 
+  @Test
+  public void rollbackUncommittedTxnInConsistencyMode() throws SQLException {
+    String tableName = "books";
+    Map<String, String> props = new HashMap<>();
+    props.put("connection.url", sqliteHelper.sqliteUri());
+    props.put("auto.create", "true");
+    props.put("pk.mode", "record_key");
+    props.put("pk.fields", "id");
+    props.put("consistent.writes", "true");
+
+    writer = newWriter(props);
+
+    Schema keySchema = SchemaBuilder.struct()
+            .field("id", Schema.INT32_SCHEMA);
+    Struct keyStruct1 = new Struct(keySchema)
+            .put("id", 1);
+    Struct keyStruct2 = new Struct(keySchema)
+            .put("id", 2);
+
+    Schema valueSchema = SchemaBuilder.struct()
+            .field("author", Schema.STRING_SCHEMA)
+            .field("title", Schema.STRING_SCHEMA)
+            .field("__dbz_physicalTableIdentifier", Schema.STRING_SCHEMA)
+            .build();
+
+    Struct valueStruct1 = new Struct(valueSchema)
+            .put("author", "Tom Robbins")
+            .put("title", "Villa Incognito")
+            .put("__dbz_physicalTableIdentifier", "books");
+    Struct valueStruct2 = new Struct(valueSchema)
+            .put("author", "George Orwell")
+            .put("title", "Animal Farm")
+            .put("__dbz_physicalTableIdentifier", "books");
+
+    Schema txnSchema = SchemaBuilder.struct()
+            .field("status", Schema.STRING_SCHEMA);
+    Struct beginStruct = new Struct(txnSchema).put("status", "BEGIN");
+
+    Struct endStruct = new Struct(txnSchema).put("status", "END");
+
+    // Put the same schema and value in transactional records for ease of use.
+    List<SinkRecord> records = new ArrayList<>();
+    records.add(new SinkRecord(tableName, 0, txnSchema, beginStruct, txnSchema, beginStruct, 0));
+    records.add(new SinkRecord(tableName, 0, keySchema, keyStruct1, valueSchema, valueStruct1, 1));
+    records.add(new SinkRecord(tableName, 0, txnSchema, beginStruct, txnSchema, beginStruct, 2));
+    records.add(new SinkRecord(tableName, 0, keySchema, keyStruct2, valueSchema, valueStruct2, 3));
+    records.add(new SinkRecord(tableName, 0, txnSchema, endStruct, txnSchema, endStruct, 4));
+    writer.writeConsistently(records);
+
+    assertEquals(
+            1,
+            sqliteHelper.select("select * from books", new SqliteHelper.ResultSetReadCallback() {
+              @Override
+              public void read(ResultSet rs) throws SQLException {
+                assertEquals(keyStruct2.getInt32("id").byteValue(), rs.getInt("id"));
+                assertEquals(valueStruct2.getString("author"), rs.getString("author"));
+                assertEquals(valueStruct2.getString("title"), rs.getString("title"));
+              }
+            })
+    );
+  }
+
+
 }
